@@ -1,11 +1,13 @@
-from flask import Flask, request, jsonify, render_template_string
+from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
 import os
 from dotenv import load_dotenv, find_dotenv
 from openai import OpenAI
 
 _ = load_dotenv(find_dotenv())
 
-app = Flask(__name__)
+app = FastAPI()
 
 # 确保您在环境变量中设置了 DeepSeek API 密钥
 DEEPSEEK_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -157,13 +159,15 @@ html_template = """
 </html>
 """
 
-@app.route('/')
-def index():
-    return render_template_string(html_template)
+templates = Jinja2Templates(directory="templates")
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    data = request.get_json()
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "html_template": html_template})
+
+@app.post("/chat", response_class=JSONResponse)
+async def chat(request: Request):
+    data = await request.json()
     messages = data.get('messages', [])
     
     # 添加系统提示
@@ -180,10 +184,7 @@ def chat():
             stream=False
         )
         assistant_message = response.choices[0].message.content
-        return jsonify({"reply": assistant_message})
+        return {"reply": assistant_message}
     except Exception as e:
         print(f'错误：{e}')
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run(debug=True)
+        raise HTTPException(status_code=500, detail=str(e))
